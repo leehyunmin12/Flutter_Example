@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:url_launcher/url_launcher_string.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webtoonflix/models/webtoon_detail_model.dart';
 import 'package:webtoonflix/models/webtoon_episode_model.dart';
 import 'package:webtoonflix/services/api_service.dart';
@@ -23,12 +22,44 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   late Future<WebtoonDetailModel> webtoon;
   late Future<List<WebtoonEpisodeModel>> episodes;
+  late SharedPreferences prefs;
+  bool isLiked = false;
+
+  Future initPrefs() async {
+    prefs = await SharedPreferences.getInstance();
+    final likedToons = prefs.getStringList('likedToons');
+    if (likedToons != null) {
+      if (likedToons.contains(widget.id) == true) {
+        setState(() {
+          isLiked = true;
+        });
+      }
+    } else {
+      await prefs.setStringList('likedToons', []);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     webtoon = Apiservice.getToonById(widget.id);
     episodes = Apiservice.getLatestEpisodesById(widget.id);
+    initPrefs();
+  }
+
+  onHeartTap() async {
+    final likedToons = prefs.getStringList('likedToons');
+    if (likedToons != null) {
+      if (isLiked) {
+        likedToons.remove(widget.id);
+      } else {
+        likedToons.add(widget.id);
+      }
+      await prefs.setStringList('likedToons', likedToons);
+      setState(() {
+        isLiked = !isLiked;
+      });
+    }
   }
 
   @override
@@ -36,85 +67,99 @@ class _DetailScreenState extends State<DetailScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        shadowColor: Colors.black,
-        elevation: 0.5,
+        elevation: 2,
         backgroundColor: Colors.white,
         foregroundColor: Colors.green,
+        actions: [
+          IconButton(
+            onPressed: onHeartTap,
+            icon: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_outline,
+            ),
+          )
+        ],
         title: Text(
           widget.title,
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w400),
+          style: const TextStyle(
+            fontSize: 24,
+          ),
         ),
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: EdgeInsetsGeometry.all(50),
+          padding: const EdgeInsets.all(50),
           child: Column(
             children: [
-              Column(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Hero(
-                        tag: widget.id,
-                        child: Container(
-                          width: 250,
-                          clipBehavior: Clip.hardEdge,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                blurRadius: 15,
-                                offset: Offset(10, 10),
-                                color: Colors.black.withOpacity(0.5),
-                              ),
-                            ],
-                          ),
-                          child: Image.network(widget.thumb),
-                        ),
+                  Hero(
+                    tag: widget.id,
+                    child: Container(
+                      width: 250,
+                      clipBehavior: Clip.hardEdge,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            blurRadius: 15,
+                            offset: const Offset(10, 10),
+                            color: Colors.black.withOpacity(0.3),
+                          )
+                        ],
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 25),
-                  FutureBuilder(
-                    future: webtoon,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              snapshot.data!.about,
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            SizedBox(height: 15),
-                            Text(
-                              '${snapshot.data!.genre} / ${snapshot.data!.age}',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ],
-                        );
-                      }
-                      return Text("...");
-                    },
-                  ),
-                  SizedBox(height: 50),
-                  FutureBuilder(
-                    future: episodes,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        return Column(
-                          children: [
-                            for (var episode in snapshot.data!)
-                              Episode(episode: episode, webtoonId: widget.id),
-                          ],
-                        );
-                      }
-                      return Container();
-                    },
+                      child: Image.network(widget.thumb),
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(
+                height: 25,
+              ),
+              FutureBuilder(
+                future: webtoon,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          snapshot.data!.about,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(
+                          height: 15,
+                        ),
+                        Text(
+                          '${snapshot.data!.genre} / ${snapshot.data!.age}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    );
+                  }
+                  return const Text("...");
+                },
+              ),
+              const SizedBox(
+                height: 25,
+              ),
+              FutureBuilder(
+                future: episodes,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Column(
+                      children: [
+                        for (var episode in snapshot.data!)
+                          Episode(
+                            episode: episode,
+                            webtoonId: widget.id,
+                          )
+                      ],
+                    );
+                  }
+                  return Container();
+                },
+              )
             ],
           ),
         ),
